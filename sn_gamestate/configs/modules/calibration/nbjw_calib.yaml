@@ -3,3 +3,4 @@ image_width: 1920
 image_height: 1080
 batch_size: 256
 use_prev_homography: True
+homography_export_dir: homographies

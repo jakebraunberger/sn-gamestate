@@ -20,6 +20,7 @@ from sn_calibration_baseline.soccerpitch import SoccerPitch
 from tvcalib.utils.io import detach_dict, tensor2list
 from tvcalib.utils.objects_3d import SoccerPitchLineCircleSegments, \
     SoccerPitchSNCircleCentralSplit
+from sn_gamestate.calibration.homography_archive import HomographyArchive
 
 
 class TVCalib_Segmentation(ImageLevelModule):
@@ -86,15 +87,26 @@ class TVCalib(ImageLevelModule):
         "detection": ["bbox_ltwh"],
     }
     output_columns = {
-        "image": ["parameters"],
+        "image": ["parameters", "homography", "homography_estimated", "homography_reused"],
         "detection": ["bbox_pitch"],
     }
 
-    def __init__(self, image_width, image_height, lens_dist, optim_steps, batch_size, device, **kwargs):
+    def __init__(
+        self,
+        image_width,
+        image_height,
+        lens_dist,
+        optim_steps,
+        batch_size,
+        device,
+        homography_export_dir="homographies",
+        **kwargs,
+    ):
         super().__init__(batch_size)
         self.image_width = image_width
         self.image_height = image_height
         self.device = device
+        self.homography_archive = HomographyArchive(homography_export_dir)
         self.object3d = SoccerPitchLineCircleSegments(
             device=device, base_field=SoccerPitchSNCircleCentralSplit()
         )
@@ -108,6 +120,9 @@ class TVCalib(ImageLevelModule):
                         log_per_step=False,
                         tqdm_kwqargs={"disable": True},
                     )
+
+    def reset(self):
+        self.homography_archive.reset()
 
     def preprocess(self, image, detections: pd.DataFrame, metadata: pd.Series) -> Any:
         keypoints_raw = metadata["lines"]
@@ -133,9 +148,11 @@ class TVCalib(ImageLevelModule):
         output_detections = []
         output_index = []
         camera_predictions = []
+        homographies = []
         for idx, params in output_df.iterrows():
             sn_cam = Camera(iwidth=self.image_width, iheight=self.image_height)
-            # homography.append(params["homography"].numpy())
+            homography = np.asarray(params["homography"], dtype=float).reshape(3, 3)
+            homographies.append(homography)
             sn_cam.from_json_parameters(params.to_dict())
             # sn_cam.set_camera(
             #     pan=params.pan_degrees, tilt=params.tilt_degrees, roll=params.roll_degrees,
@@ -149,11 +166,22 @@ class TVCalib(ImageLevelModule):
             image_detections["bbox_pitch"] = image_detections.bbox.ltrb().apply(get_bbox_pitch(sn_cam))
             output_detections.extend(image_detections["bbox_pitch"])
             output_index.extend(image_detections.index)
+        self.homography_archive.write(
+            metadatas, homographies, homographies, [False] * len(homographies)
+        )
         return pd.DataFrame({
             "bbox_pitch": output_detections
         },
             index=output_index
-        ), pd.DataFrame({"parameters": camera_predictions}, index=metadatas.index)
+        ), pd.DataFrame(
+            {
+                "parameters": camera_predictions,
+                "homography": homographies,
+                "homography_estimated": homographies,
+                "homography_reused": [False] * len(homographies),
+            },
+            index=metadatas.index,
+        )
 
 
 def get_bbox_pitch(cam):

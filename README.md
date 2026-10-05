@@ -268,6 +268,18 @@ uv run tracklab -cn soccernet
 By default, this command will perform game state reconstruction on one SoccerNet validation sequence, display results in a .mp4 video saved on disk and print the final performance metric.
 As a reminder, the dataset and all model's weights will be downloaded automatically on the first run.
 
+The calibration module also exports standalone homography CSV files under
+`homographies/` in the run output directory, one file per video
+(`homography_<video_id>.csv`). Each row is keyed by `video_id`, TrackLab's
+1-based `frame`, and `image_id`. The `h00` through `h22` columns contain the
+effective image-to-pitch matrix used for that frame; `estimated_h00` through
+`estimated_h22` contain the frame's newly estimated matrix, or are blank when
+no estimate was available. `homography_reused` identifies frames that used
+the previous valid matrix, and `homography_valid` indicates whether the
+effective matrix is finite. The same matrix values are also kept in the image
+metadata of the tracker state. Set `homography_export_dir` in the selected
+calibration module config to change the export directory.
+
 You can find all possible configuration groups at the top when running the following command :  
 ```bash
 uv run tracklab --help

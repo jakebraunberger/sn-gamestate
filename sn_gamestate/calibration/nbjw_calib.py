@@ -22,6 +22,7 @@ from nbjw_calib.utils.utils_heatmap import (get_keypoints_from_heatmap_batch_max
                                             get_keypoints_from_heatmap_batch_maxpool_l, complete_keypoints, \
                                             coords_to_dict)
 from nbjw_calib.utils.utils_calib import FramebyFrameCalib
+from sn_gamestate.calibration.homography_archive import HomographyArchive
 
 
 def kp_to_line(keypoints):
@@ -158,19 +159,33 @@ class NBJW_Calib(ImageLevelModule):
         "detection": ["bbox_ltwh"],
     }
     output_columns = {
-        "image": ["parameters"],
+        "image": ["parameters", "homography", "homography_estimated", "homography_reused"],
         "detection": ["bbox_pitch"],
     }
 
-    def __init__(self, image_width, image_height, batch_size, use_prev_homography, **kwargs):
+    def __init__(
+        self,
+        image_width,
+        image_height,
+        batch_size,
+        use_prev_homography,
+        homography_export_dir="homographies",
+        **kwargs,
+    ):
         super().__init__(batch_size)
         self.image_width = image_width
         self.image_height = image_height
         self.cam = FramebyFrameCalib(self.image_width, self.image_height, denormalize=True)
         self.use_prev_homography = use_prev_homography
+        self.homography_archive = HomographyArchive(homography_export_dir)
 
         self.last_h = None
         self.last_params = None
+
+    def reset(self):
+        self.last_h = None
+        self.last_params = None
+        self.homography_archive.reset()
 
     def preprocess(self, image, detections: pd.DataFrame, metadata: pd.Series) -> Any:
         return image
@@ -180,6 +195,8 @@ class NBJW_Calib(ImageLevelModule):
 
         self.cam.update(predictions)
         h = self.cam.get_homography_from_ground_plane(use_ransac=50, inverse=True)
+        estimated_h = h
+        homography_reused = False
         if self.use_prev_homography:
             if h is not None:
                 camera_predictions = self.cam.heuristic_voting()["cam_params"]
@@ -190,13 +207,11 @@ class NBJW_Calib(ImageLevelModule):
                 if self.last_h is not None:
                     camera_predictions = self.last_params
                     h = self.last_h
+                    homography_reused = True
                     detections["bbox_pitch"] = detections.bbox.ltrb().apply(get_bbox_pitch(h))
                 else:
                     camera_predictions = {}
                     detections["bbox_pitch"] = None
-            return detections[["bbox_pitch"]], pd.DataFrame([
-                pd.Series({"parameters": camera_predictions}, name=metadatas.iloc[0].name)
-            ])
         else:
             if h is not None:
                 camera_predictions = self.cam.heuristic_voting()['cam_params']
@@ -205,9 +220,24 @@ class NBJW_Calib(ImageLevelModule):
                 camera_predictions = {}
                 detections["bbox_pitch"] = None
 
-            return detections[["bbox_pitch"]], pd.DataFrame([
-                pd.Series({"parameters": camera_predictions}, name=metadatas.iloc[0].name)
-            ])
+        frame_metadata = metadatas.iloc[:1]
+        self.homography_archive.write(
+            frame_metadata, [h], [estimated_h], [homography_reused]
+        )
+        image_output = pd.DataFrame(
+            [
+                pd.Series(
+                    {
+                        "parameters": camera_predictions,
+                        "homography": h,
+                        "homography_estimated": estimated_h,
+                        "homography_reused": homography_reused,
+                    },
+                    name=metadatas.iloc[0].name,
+                )
+            ]
+        )
+        return detections[["bbox_pitch"]], image_output
 
 
 def get_bbox_pitch(h):

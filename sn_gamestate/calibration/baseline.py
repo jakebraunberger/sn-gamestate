@@ -9,16 +9,31 @@ from sn_calibration_baseline.baseline_cameras import (normalization_transform,
 from sn_calibration_baseline.camera import unproject_image_point
 from sn_calibration_baseline.soccerpitch import SoccerPitch
 from tracklab.pipeline import ImageLevelModule
+from sn_gamestate.calibration.homography_archive import HomographyArchive
 
 
 class BaselineCalibration(ImageLevelModule):
     input_columns = []
-    output_columns = []
+    output_columns = {
+        "image": ["homography", "homography_estimated", "homography_reused", "parameters"],
+        "detection": ["bbox_pitch"],
+    }
 
-    def __init__(self, batch_size, resolution_width, resolution_height, **kwargs):
+    def __init__(
+        self,
+        batch_size,
+        resolution_width,
+        resolution_height,
+        homography_export_dir="homographies",
+        **kwargs,
+    ):
         super().__init__(batch_size)
         self.resolution_width = resolution_width
         self.resolution_height = resolution_height
+        self.homography_archive = HomographyArchive(homography_export_dir)
+
+    def reset(self):
+        self.homography_archive.reset()
 
     def preprocess(self, image, detections: pd.DataFrame, metadata: pd.Series) -> Any:
         return image
@@ -33,6 +48,8 @@ class BaselineCalibration(ImageLevelModule):
         potential_3d_2d_matches = {}
         src_pts = []
         success = False
+        homography = None
+        estimated_homography = None
         for k, v in predictions.items():
             if k == 'Circle central' or "unknown" in k:
                 continue
@@ -70,13 +87,14 @@ class BaselineCalibration(ImageLevelModule):
                           potential_3d_2d_matches.keys()]
             T1 = normalization_transform(target_pts)
             T2 = normalization_transform(src_pts)
-            success, homography = estimate_homography_from_line_correspondences(
+            success, homography_pitch_to_image = estimate_homography_from_line_correspondences(
                 line_matches, T1, T2)
             if success:
+                estimated_homography = np.linalg.inv(homography_pitch_to_image)
                 # cv_image = draw_pitch_homography(cv_image, homography)
 
                 cam = Camera(self.resolution_width, self.resolution_height)
-                success = cam.from_homography(homography)
+                success = cam.from_homography(homography_pitch_to_image)
                 if success:
                     point_matches = []
                     added_pts = set()
@@ -105,14 +123,30 @@ class BaselineCalibration(ImageLevelModule):
 
         if success:
             camera_predictions = cam.to_json_parameters()
+            homography = np.linalg.inv(cam.to_homography())
             # confusion1, per_class_conf1, reproj_errors1 = evaluate_camera_projection()
             detections["bbox_pitch"] = detections.bbox.ltrb().apply(get_bbox_pitch(cam))
         else:
             camera_predictions = {}
             detections["bbox_pitch"] = None
-        return detections[["bbox_pitch"]], pd.DataFrame([
-            pd.Series({"parameters": camera_predictions}, name=metadatas.iloc[0].name)
-        ])
+        frame_metadata = metadatas.iloc[:1]
+        self.homography_archive.write(
+            frame_metadata, [homography], [estimated_homography], [False]
+        )
+        image_output = pd.DataFrame(
+            [
+                pd.Series(
+                    {
+                        "parameters": camera_predictions,
+                        "homography": homography,
+                        "homography_estimated": estimated_homography,
+                        "homography_reused": False,
+                    },
+                    name=metadatas.iloc[0].name,
+                )
+            ]
+        )
+        return detections[["bbox_pitch"]], image_output
 
 def get_bbox_pitch(cam):
     def _get_bbox(bbox_ltrb):
