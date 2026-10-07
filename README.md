@@ -287,6 +287,27 @@ uv run tracklab --help
 
 You can have a look at the default parameters in [soccernet.yaml](sn_gamestate/configs/soccernet.yaml).
 
+### Running on an extracted image folder
+
+For a folder containing extracted image frames (rather than an MP4), use the
+`image_folder` dataset configuration. It creates `video_id`, sequential
+zero-based `frame`, and `file_path` metadata from the image files:
+
+```bash
+uv run tracklab -cn soccernet \
+  dataset=image_folder \
+  dataset.video_path=/absolute/path/to/SNGS-063_snippet_f71_to_748 \
+  dataset.dataset_path=/absolute/path/to/snippets \
+  dataset.eval_set=val \
+  dataset.nvid=-1 \
+  eval_tracking=false
+```
+
+The folder may contain image files alongside other files; non-image files are
+ignored. Supported image extensions include JPG, PNG, BMP, TIFF, and WebP.
+The resulting homography archive is named
+`homography_<folder-name>.csv`.
+
 ## Tutorials
 
 ### How to get started

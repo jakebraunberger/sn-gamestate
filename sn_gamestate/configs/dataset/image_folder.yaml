@@ -1,0 +1,6 @@
+defaults:
+  - default
+
+_target_: sn_gamestate.dataset.image_folder.ImageFolderDataset
+
+video_path: "PATH/TO/IMAGE_FOLDER"

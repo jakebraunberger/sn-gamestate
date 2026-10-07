@@ -1,7 +1,9 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from sn_gamestate.calibration.homography_archive import HomographyArchive
+from sn_gamestate.dataset.image_folder import ImageFolderDataset
 
 
 def test_archives_matrices_per_video_and_appends_frames(tmp_path):
@@ -51,3 +53,25 @@ def test_reset_starts_a_fresh_archive_for_each_video(tmp_path):
 
     rows = pd.read_csv(tmp_path / "homography_10.csv")
     assert len(rows) == 1
+
+
+def test_image_folder_dataset_builds_ordered_video_metadata(tmp_path):
+    for filename in ("frame_10.jpg", "frame_2.jpg", "notes.json"):
+        (tmp_path / filename).touch()
+
+    dataset = ImageFolderDataset(str(tmp_path), str(tmp_path))
+    tracking_set = dataset.sets["val"]
+
+    assert tracking_set.video_metadatas.index.tolist() == [tmp_path.name]
+    assert tracking_set.image_metadatas["name"].tolist() == ["frame_2", "frame_10"]
+    assert tracking_set.image_metadatas["frame"].tolist() == [0, 1]
+    assert tracking_set.image_metadatas["video_id"].tolist() == [tmp_path.name] * 2
+    assert tracking_set.image_metadatas["file_path"].tolist() == [
+        str((tmp_path / "frame_2.jpg").resolve()),
+        str((tmp_path / "frame_10.jpg").resolve()),
+    ]
+
+
+def test_image_folder_dataset_rejects_empty_folder(tmp_path):
+    with pytest.raises(ValueError, match="No supported image files"):
+        ImageFolderDataset(str(tmp_path), str(tmp_path))
