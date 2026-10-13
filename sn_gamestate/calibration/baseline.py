@@ -131,7 +131,10 @@ class BaselineCalibration(ImageLevelModule):
             detections["bbox_pitch"] = None
         frame_metadata = metadatas.iloc[:1]
         self.homography_archive.write(
-            frame_metadata, [homography], [estimated_homography], [False]
+            frame_metadata, [homography], [estimated_homography], [False],
+            camera_parameters=[camera_predictions],
+            image_width=self.resolution_width, image_height=self.resolution_height,
+            calibration_backend="baseline",
         )
         image_output = pd.DataFrame(
             [

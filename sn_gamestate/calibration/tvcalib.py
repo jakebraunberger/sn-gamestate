@@ -167,7 +167,10 @@ class TVCalib(ImageLevelModule):
             output_detections.extend(image_detections["bbox_pitch"])
             output_index.extend(image_detections.index)
         self.homography_archive.write(
-            metadatas, homographies, homographies, [False] * len(homographies)
+            metadatas, homographies, homographies, [False] * len(homographies),
+            camera_parameters=camera_predictions,
+            image_width=self.image_width, image_height=self.image_height,
+            calibration_backend="tvcalib",
         )
         return pd.DataFrame({
             "bbox_pitch": output_detections

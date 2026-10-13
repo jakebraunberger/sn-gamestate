@@ -280,6 +280,27 @@ effective matrix is finite. The same matrix values are also kept in the image
 metadata of the tracker state. Set `homography_export_dir` in the selected
 calibration module config to change the export directory.
 
+The same directory also contains `camera_<video_id>.csv`, exported by NBJW,
+PnLCalib, TVCalib and baseline calibration. Rows use the same `video_id`, `frame`
+and `image_id` as the homography archive. They record the calibration backend,
+calibration image width/height, pan/tilt/roll in degrees, focal lengths and
+principal point in calibration pixels, and camera position in meters.
+`parameters_json` preserves the complete backend camera dictionary (including
+rotation and distortion fields where provided). `estimated_parameters_json`
+is blank when previous parameters were reused or no estimate was available.
+`camera_parameters_reused` marks reuse; `camera_parameters_valid` checks finite
+position, orientation, principal point and positive focal lengths, not calibration
+accuracy. Missing values are blank; nonfinite values in JSON are `null`.
+
+These estimates come from pitch/goal geometry, independently of ball-flight
+fitting, but still depend on the calibration model and its assumptions. Coordinates
+are preserved without conversion: SoccerNet calibration uses negative Z above
+the pitch, whereas the ball-flight reconstruction uses positive height.
+NBJW/PnLCalib can estimate camera parameters separately from their ground-plane
+homography, so the two estimates need not be perfectly consistent. Existing
+tracker states also keep these dictionaries in the image metadata's `parameters`
+column; standalone camera CSVs are generated on new calibration runs.
+
 You can find all possible configuration groups at the top when running the following command :  
 ```bash
 uv run tracklab --help

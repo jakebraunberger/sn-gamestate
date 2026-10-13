@@ -234,7 +234,10 @@ class PnLCalib(ImageLevelModule):
 
         frame_metadata = metadatas.iloc[:1]
         self.homography_archive.write(
-            frame_metadata, [h], [estimated_h], [homography_reused]
+            frame_metadata, [h], [estimated_h], [homography_reused],
+            camera_parameters=[camera_predictions],
+            image_width=self.image_width, image_height=self.image_height,
+            calibration_backend="pnlcalib",
         )
         image_output = pd.DataFrame(
             [

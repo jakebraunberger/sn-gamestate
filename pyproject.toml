@@ -19,6 +19,7 @@ dependencies = [
     "numpy==1.26.4",
     "transformers==4.35.2",
     "tokenizers==0.15.2",
+    "setuptools<70.0",
 ]
 
 [project.entry-points.tracklab_plugin]
