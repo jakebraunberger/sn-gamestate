@@ -49,16 +49,16 @@ model_dir: "${project_dir}/pretrained_models"
 num_cores: 4
 use_wandb: False
 use_rich: True
-device: "cpu"
+device: "gpu"
 
 modules: # Allows module-specific batch_size and other configuration
-  bbox_detector: {batch_size: 8}
-  pose_bottomup: {batch_size: 8}
-  reid: {batch_size: 64}
-  track: {batch_size: 64}
-  pitch: {batch_size: 1}
-  calibration: {batch_size: 1}
-  jersey_number_detect: {batch_size: 8}
+  bbox_detector: {batch_size: 16}
+  pose_bottomup: {batch_size: 16}
+  reid: {batch_size: 128}
+  track: {batch_size: 128}
+  pitch: {batch_size: 2}
+  calibration: {batch_size: 2}
+  jersey_number_detect: {batch_size: 16}
 
 # Flags
 test_tracking: True
